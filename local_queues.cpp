@@ -12,9 +12,14 @@ struct Worker
 {
     deque<int> q;
     mutex m;
-    int id;
+    int id, executed, stolen, attempts;
 
-    Worker(int id_) : id(id_) {}
+    Worker(int id_) : id(id_)
+    {
+        executed = 0;
+        stolen = 0;
+        attempts = 0;
+    }
 };
 
 vector<Worker *> workers;
@@ -38,13 +43,18 @@ void worker_thread(Worker *self)
             }
         }
 
+        if (task != -1)
+            self->executed++;
+
         // 2️⃣ If no local work → try stealing
         if (task == -1)
         {
 
             bool stole = false;
 
-            for (int attempt = 0; attempt < workers.size(); ++attempt)
+            int attempt = 0;
+
+            for (; attempt < workers.size(); ++attempt)
             {
                 int victim_index = rng() % workers.size();
                 Worker *victim = workers[victim_index];
@@ -64,11 +74,21 @@ void worker_thread(Worker *self)
                     stole = true;
                     break;
                 }
+                else
+                {
+                    this_thread::sleep_for(5ms);
+                }
             }
+
+            self->attempts += attempt;
 
             if (!stole)
             {
                 break; // no work anywhere → exit
+            }
+            else
+            {
+                self->stolen++;
             }
         }
 
@@ -85,7 +105,7 @@ void worker_thread(Worker *self)
 int main()
 {
 
-    int num_workers = 6;
+    int num_workers = 20;
 
     // Create workers
     for (int i = 0; i < num_workers; ++i)
@@ -95,7 +115,7 @@ int main()
 
     // Force imbalance:
     // Only worker 0 has tasks
-    for (int i = 1; i <= 20; ++i)
+    for (int i = 1; i <= 50; ++i)
     {
         workers[0]->q.push_back(50); // equal duration tasks
     }
@@ -110,6 +130,16 @@ int main()
     for (auto &t : threads)
         t.join();
 
-    cout << "All tasks completed." << endl;
+    for (auto i : workers)
+    {
+        cout << "Worker:" << i->id << endl;
+        cout << "Executed:" << i->executed << endl;
+        cout << "Stealing attempts:" << i->attempts << endl;
+        cout << "Successfull attempts:" << i->stolen << endl;
+        cout << endl;
+    }
+
+    cout
+        << "All tasks completed." << endl;
     return 0;
 }
