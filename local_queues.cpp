@@ -113,11 +113,13 @@ int main()
         workers.push_back(new Worker(i));
     }
 
-    // Force imbalance:
-    // Only worker 0 has tasks
+    std::mt19937 rng(std::random_device{}());
+
     for (int i = 1; i <= 50; ++i)
     {
-        workers[0]->q.push_back(50); // equal duration tasks
+        int index = rng() % workers.size();
+
+        workers[index]->q.push_back(50); // equal duration tasks
     }
 
     vector<thread> threads;
