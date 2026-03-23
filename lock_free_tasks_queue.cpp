@@ -7,7 +7,7 @@ class worker
 {
     atomic<int> top, bottom;
     int capacity;
-    deque<int> tasks;
+    vector<int> tasks;
 
 public:
     worker(int top, int bottom, int capacity)
@@ -21,12 +21,13 @@ public:
     void push_bottom(int x)
     {
         int b = bottom.load(), t = top.load();
-        if (bottom - top > capacity)
+
+        if (b - t >= capacity)
         {
             cout << "Tasks queue full" << endl;
             return;
         }
-        tasks[b] = x;
+        tasks[b % capacity] = x;
         atomic_thread_fence(memory_order_release);
         bottom.store(b + 1);
     }
@@ -40,7 +41,7 @@ public:
 
         if (t <= b)
         {
-            int task = tasks[b];
+            int task = tasks[b % capacity];
 
             if (t == b)
             {
@@ -66,7 +67,7 @@ public:
 
         if (t < b)
         {
-            int task = tasks[t];
+            int task = tasks[t % capacity];
 
             if (top.compare_exchange_strong(t, t + 1))
                 return task;
@@ -76,22 +77,43 @@ public:
     }
 };
 
-int main()
+void push_bottom(worker *w)
 {
-    worker w(0, 0, 5);
-
     for (int i = 1; i <= 10; i++)
-        w.push_bottom(i);
-
+        w->push_bottom(i);
+}
+void pop_bottom(worker *w)
+{
     while (true)
     {
-        int x = w.pop_bottom();
-
+        int x = w->pop_bottom();
         if (x == -1)
             break;
-
         cout << x << ',';
     }
+}
+void steal(worker *w)
+{
+    while (true)
+    {
+        int x = w->steal();
+        if (x == -1)
+            break;
+        cout << x << ',';
+    }
+}
 
+int main()
+{
+    worker *w = new worker(0, 0, 10);
+    thread t1(push_bottom, w);
+
+    t1.join();
+
+    thread t2(pop_bottom, w), t3(steal, w);
+    t2.join();
+    t3.join();
+
+    cout << "Everything completed" << endl;
     return 0;
 }
