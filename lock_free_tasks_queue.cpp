@@ -1,6 +1,9 @@
 #include <iostream>
 #include <utility>
 #include <thread>
+#include <random>
+#include <limits>
+
 using namespace std;
 
 class worker
@@ -77,6 +80,9 @@ public:
     }
 };
 
+atomic<int> numW;
+vector<worker *> workers;
+
 void push_bottom(worker *w)
 {
     for (int i = 1; i <= 10; i++)
@@ -84,36 +90,56 @@ void push_bottom(worker *w)
 }
 void pop_bottom(worker *w)
 {
+
+    random_device rd;
+    mt19937 gen(rd());
+    uniform_int_distribution<int> dist(0, numW - 1);
+
     while (true)
     {
         int x = w->pop_bottom();
         if (x == -1)
-            break;
-        cout << x << ',';
-    }
-}
-void steal(worker *w)
-{
-    while (true)
-    {
-        int x = w->steal();
-        if (x == -1)
-            break;
-        cout << x << ',';
+        {
+            for (int i = 0; i < numW; i++)
+            {
+                int victim = dist(gen);
+
+                if (workers[victim] == w)
+                    continue;
+
+                x = workers[victim]->steal();
+
+                if (x == -1)
+                    break;
+
+                cout << x << endl;
+            }
+        }
+        else
+            cout << x << ',';
     }
 }
 
 int main()
 {
-    worker *w = new worker(0, 0, 10);
-    thread t1(push_bottom, w);
+    numW = 10;
 
-    t1.join();
+    workers.push_back(new worker(0, 0, 5));
 
-    thread t2(pop_bottom, w), t3(steal, w);
-    t2.join();
-    t3.join();
+    for (int i = 1; i < numW; i++)
+        workers.push_back(new worker(0, 0, 5));
 
-    cout << "Everything completed" << endl;
+    vector<thread *> threads;
+
+    threads.push_back(new thread(push_bottom, workers[0]));
+
+    for (int i = 0; i < numW; i++)
+        threads.push_back(new thread(pop_bottom, workers[i]));
+
+    for (int i = 0; i < numW; i++)
+        threads[i]->join();
+
+    cout << "Completed!!";
+
     return 0;
 }
